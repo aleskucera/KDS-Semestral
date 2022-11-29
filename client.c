@@ -48,12 +48,13 @@ int main() {
 
     if (req_image(client_socket, &image_size)) {
         buffer = (unsigned char *) malloc(image_size);
-        receive_image(client_socket, buffer, image_size);
+        receive_image(client_socket, buffer);
         if (write_image(file_name, buffer, image_size)) {
             printf("Image written successfully!\n");
         } else {
             printf("Error writing image!\n");
         }
+        free(buffer);
     } else {
         printf("Error receiving image!\n");
     }

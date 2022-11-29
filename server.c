@@ -51,10 +51,9 @@ int main() {
     // Offer image to the client and send it
     if (off_image(client_socket, image_size)) {
         send_image(client_socket, buffer, image_size);
+    } else {
+        printf("Error sending image!\n");
     }
-    //wait 1 second
-    sleep(10);
-    printf("Closing the socket\n");
 
     // Close the socket
     close(server_socket);
