@@ -10,13 +10,12 @@
 
 #include <stdbool.h>
 
-# define TEST_SIZE 4
 # define CRC_POLY 0xffff
 # define CRC_SIZE 2
 
-void code_word(unsigned char *buffer, long size);
+void encode_packet(unsigned char *buffer, long size);
 
-bool decode_word(unsigned char *buffer, long size);
+bool decode_packet(unsigned char *buffer, long size);
 
 unsigned short crc_ccitt(unsigned char *data, size_t length, unsigned short seed, unsigned short final);
 

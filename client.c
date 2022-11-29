@@ -9,21 +9,18 @@
 #include <netinet/in.h>
 
 #include "image.h"
+#include "communication.h"
 
 int main() {
 
     // Socket
-    long msg_size;
     int client_socket;
     int connection_status;
     struct sockaddr_in server_address;
 
     // Image
+    size_t image_size;
     unsigned char *buffer;
-    unsigned long image_size;
-    unsigned long number_of_packets;
-    unsigned long last_packet_size;
-    bool write_status;
     char *file_name = "/home/ales/School/KDS/KDS-Semestral/images/received_image.jpeg";
 
 
@@ -49,59 +46,21 @@ int main() {
     }
 
 
-    // Receive message from the server about size of the image
-    msg_size = recv(client_socket, &image_size, sizeof(image_size), 0);
-
-    // Check for error with the connection
-    if (msg_size == -1) {
-        printf("There was an error receiving data from the remote socket \n\n");
-    } else {
-        printf("Received image size message from the server: %ld\n", image_size);
-    }
-
-    // Send message to the server to start sending the image
-    msg_size = send(client_socket, "start", 5, 0);
-
-    // Check for error with the connection
-    if (msg_size == -1) {
-        printf("There was an error sending data to the remote socket \n\n");
-    } else {
-        printf("Sent message to the server: start\n");
-    }
-
-    // Number of packets is image size divided by 1024 and rounded up
-    buffer = (unsigned char *) malloc(image_size);
-    number_of_packets = (int) (image_size / 1024) + 1;
-    last_packet_size = image_size % 1024;
-
-
-    for (int i = 0; i < number_of_packets; ++i) {
-        if (i == number_of_packets - 1) {
-            printf("Receiving last packet\n");
-            msg_size = recv(client_socket, buffer + i * 1024, last_packet_size, 0);
+    if (req_image(client_socket, &image_size)) {
+        buffer = (unsigned char *) malloc(image_size);
+        receive_image(client_socket, buffer, image_size);
+        if (write_image(file_name, buffer, image_size)) {
+            printf("Image written successfully!\n");
         } else {
-            msg_size = recv(client_socket, buffer + i * 1024, 1024, 0);
+            printf("Error writing image!\n");
         }
-        if (msg_size == -1) {
-            printf("There was an error receiving data from the remote socket \n\n");
-        } else {
-            printf("Received packet %d from the server\n", i);
-        }
-    }
-
-    // Save the image
-    write_status = write_image(file_name, buffer, image_size);
-
-    if (!write_status) {
-        printf("Error writing image!\n");
     } else {
-        printf("Image written successfully!\n");
+        printf("Error receiving image!\n");
     }
 
-    // Close the socket
     close(client_socket);
 
-    return 0;
+    return EXIT_SUCCESS;
 }
 
 

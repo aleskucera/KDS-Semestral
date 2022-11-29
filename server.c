@@ -9,31 +9,26 @@
 #include <netinet/in.h>
 
 #include "image.h"
+#include "communication.h"
 
 int main() {
 
     // Socket
-    long msg_size;
     int server_socket;
     int client_socket;
-    char confirmation[5];
     struct sockaddr_in server_address;
 
     // Image
     unsigned char *buffer;
     unsigned long image_size;
-    bool read_status;
-    unsigned long number_of_packets;
-    unsigned long last_packet_size;
     char *file_name = "/home/ales/School/KDS/KDS-Semestral/images/image.jpeg";
 
     // Read image
-    read_status = read_image(file_name, &buffer, &image_size);
-    if (!read_status) {
-        printf("Error reading image!\n");
-        return 1;
-    } else {
+    if (read_image(file_name, &buffer, &image_size)) {
         printf("Image read successfully!\n");
+    } else {
+        printf("Error reading image!\n");
+        return EXIT_FAILURE;
     }
 
     // Create the server socket
@@ -46,62 +41,23 @@ int main() {
     if (bind(server_socket, (struct sockaddr *) &server_address, sizeof(server_address)) == -1) {
         printf("There was an error binding the socket to an IP/Port \n\n");
     } else {
-        printf("Socket successfully binded to IP/Port \n\n");
+        printf("Socket successfully bound to IP/Port \n\n");
     }
 
+    // Listen for connections
     listen(server_socket, 1);
     client_socket = accept(server_socket, NULL, NULL);
 
-    // Send the message about size of the image
-    msg_size = send(client_socket, &image_size, sizeof(image_size), 0);
-
-    // Check for error with the connection
-    if (msg_size == -1) {
-        printf("There was an error sending data to the remote socket \n\n");
-    } else {
-        printf("Sent message to the client: %ld\n", image_size);
+    // Offer image to the client and send it
+    if (off_image(client_socket, image_size)) {
+        send_image(client_socket, buffer, image_size);
     }
-
-    // Receive message from the server to start sending the image
-    msg_size = recv(client_socket, confirmation, 5, 0);
-
-    // Check for error with the connection
-    if (msg_size == -1) {
-        printf("There was an error receiving data from the remote socket \n\n");
-    } else {
-        printf("Received message from the client: %s\n", confirmation);
-    }
-
-    // Compare confirmation message
-    if (strcmp(confirmation, "start") == 0) {
-        printf("Confirmation message received!\n");
-    } else {
-        printf("Confirmation message not received!\n");
-    }
-
-
-    // Send the image
-    number_of_packets = (int) (image_size / 1024) + 1;
-    last_packet_size = image_size % 1024;
-
-    for (int i = 0; i < number_of_packets; i++) {
-        if (i == number_of_packets - 1) {
-            printf("Sending last packet of size %ld\n", last_packet_size);
-            msg_size = send(client_socket, buffer + i * 1024, last_packet_size, 0);
-        } else {
-            msg_size = send(client_socket, buffer + i * 1024, 1024, 0);
-        }
-
-        // Check for error with the connection
-        if (msg_size == -1) {
-            printf("There was an error sending data to the remote socket \n\n");
-        } else {
-            printf("Sent packet %d to the client\n", i);
-        }
-    }
+    //wait 1 second
+    sleep(10);
+    printf("Closing the socket\n");
 
     // Close the socket
     close(server_socket);
 
-    return 0;
+    return EXIT_SUCCESS;
 }
