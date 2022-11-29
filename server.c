@@ -20,10 +20,12 @@ int main() {
     struct sockaddr_in server_address;
 
     // Image
-    char *buffer;
-    long image_size;
+    unsigned char *buffer;
+    unsigned long image_size;
     bool read_status;
-    char *file_name = "/home/ales/School/KDS/KDS-Semestral/images/image2.jpeg";
+    unsigned long number_of_packets;
+    unsigned long last_packet_size;
+    char *file_name = "/home/ales/School/KDS/KDS-Semestral/images/image.jpeg";
 
     // Read image
     read_status = read_image(file_name, &buffer, &image_size);
@@ -77,16 +79,26 @@ int main() {
         printf("Confirmation message not received!\n");
     }
 
+
     // Send the image
-    msg_size = send(client_socket, buffer, image_size, 0);
+    number_of_packets = (int) (image_size / 1024) + 1;
+    last_packet_size = image_size % 1024;
 
-    // Check for error with the connection
-    if (msg_size == -1) {
-        printf("There was an error sending data to the remote socket \n\n");
-    } else {
-        printf("Image sent successfully!\n");
+    for (int i = 0; i < number_of_packets; i++) {
+        if (i == number_of_packets - 1) {
+            printf("Sending last packet of size %ld\n", last_packet_size);
+            msg_size = send(client_socket, buffer + i * 1024, last_packet_size, 0);
+        } else {
+            msg_size = send(client_socket, buffer + i * 1024, 1024, 0);
+        }
+
+        // Check for error with the connection
+        if (msg_size == -1) {
+            printf("There was an error sending data to the remote socket \n\n");
+        } else {
+            printf("Sent packet %d to the client\n", i);
+        }
     }
-
 
     // Close the socket
     close(server_socket);

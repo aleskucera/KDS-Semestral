@@ -10,8 +10,8 @@
 
 #include <stdbool.h>
 
-bool read_image(char *path, char **buffer, long *size);
+bool read_image(char *path, unsigned char **buffer, unsigned long *size);
 
-bool write_image(char *path, char *image, long size);
+bool write_image(char *path, unsigned char *image, unsigned long size);
 
 #endif //KDS_SEMESTRAL_IMAGE_H

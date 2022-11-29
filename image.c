@@ -4,7 +4,7 @@
 
 #include "image.h"
 
-bool read_image(char *path, char **buffer, long *size) {
+bool read_image(char *path, unsigned char **buffer, unsigned long *size) {
     bool ret = false;
     FILE *file = fopen(path, "rb");
 
@@ -22,7 +22,7 @@ bool read_image(char *path, char **buffer, long *size) {
     return ret;
 }
 
-bool write_image(char *path, char *image, long size) {
+bool write_image(char *path, unsigned char *image, unsigned long size) {
     bool ret = false;
     FILE *fp;
     fp = fopen(path, "wb");
