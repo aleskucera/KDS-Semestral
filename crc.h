@@ -1,9 +1,10 @@
-//
-// Created by ales on 29.11.22.
-//
+/*********************************************************************
+* Author:     ales
+* Created:    29.11.22
+*********************************************************************/
 
-#ifndef KDS_SEMESTRAL_CRC_H
-#define KDS_SEMESTRAL_CRC_H
+#ifndef CRC_H
+#define CRC_H
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -66,4 +67,4 @@ static unsigned short crc_table[256] = {
         0x2e93, 0x3eb2, 0x0ed1, 0x1ef0
 };
 
-#endif //KDS_SEMESTRAL_CRC_H
+#endif //CRC_H

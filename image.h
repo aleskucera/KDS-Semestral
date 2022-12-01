@@ -1,9 +1,10 @@
-//
-// Created by ales on 29.11.22.
-//
+/*********************************************************************
+* Author:     ales
+* Created:    29.11.22
+*********************************************************************/
 
-#ifndef KDS_SEMESTRAL_IMAGE_H
-#define KDS_SEMESTRAL_IMAGE_H
+#ifndef IMAGE_H
+#define IMAGE_H
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -14,4 +15,4 @@ bool read_image(char *path, unsigned char **buffer, unsigned long *size);
 
 bool write_image(char *path, unsigned char *image, unsigned long size);
 
-#endif //KDS_SEMESTRAL_IMAGE_H
+#endif //IMAGE_H
