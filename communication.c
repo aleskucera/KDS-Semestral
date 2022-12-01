@@ -188,7 +188,7 @@ bool send_hash(int socket, unsigned char *hash, struct sockaddr *address) {
     packet[0] = HASH_MSG;
 
     // Add hash
-    memcpy(&packet[1], hash, 32);
+    memcpy(&packet[1], hash, SHA256_BLOCK_SIZE);
 
     // Calculate CRC
     encode_packet(packet, PACKET_SIZE);
@@ -207,7 +207,7 @@ bool send_hash(int socket, unsigned char *hash, struct sockaddr *address) {
 bool verify_hash(int socket, unsigned char *hash, struct sockaddr *address) {
     unsigned char packet[PACKET_SIZE];
     socklen_t addr_len = sizeof(*address);
-    unsigned char received_hash[32];
+    unsigned char received_hash[SHA256_BLOCK_SIZE];
 
     // Listen for packet
     recvfrom(socket, packet, PACKET_SIZE, 0, NULL, NULL);
@@ -216,9 +216,9 @@ bool verify_hash(int socket, unsigned char *hash, struct sockaddr *address) {
     if ((packet[0] == HASH_MSG) && (decode_packet(packet, PACKET_SIZE))) {
 
         // Get hash
-        memcpy(received_hash, &packet[1], 32);
+        memcpy(received_hash, &packet[1], SHA256_BLOCK_SIZE);
 
-        if (!memcmp(received_hash, hash, 32)) {
+        if (!memcmp(received_hash, hash, SHA256_BLOCK_SIZE)) {
             // Send acknowledgement
             packet[0] = ACK_MSG;
             memset(&packet[1], 0, PACKET_SIZE - 1);

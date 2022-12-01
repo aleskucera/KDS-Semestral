@@ -18,6 +18,7 @@
 #include <netinet/in.h>
 
 #include "crc.h"
+#include "sha256.h"
 
 #define REQ_MSG 'R'
 #define OFF_MSG 'O'
