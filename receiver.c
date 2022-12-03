@@ -22,7 +22,7 @@ int main() {
 
     byte *image;
     size_t image_size;
-    char *save_path = "/home/ales/School/KDS/KDS-Semestral/images/received_image.jpeg";
+    char *save_path = SAVE_PATH;
 
     // ------------------ RECEIVER CONFIG ------------------
 

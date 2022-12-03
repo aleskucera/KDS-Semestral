@@ -18,7 +18,7 @@ int main() {
 
     byte *image;
     size_t image_size;
-    char *image_path = "/home/ales/School/KDS/KDS-Semestral/images/image.jpeg";
+    char *image_path = IMAGE_PATH;
 
     SHA256_CTX ctx;
     byte hash[SHA256_BLOCK_SIZE];

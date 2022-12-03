@@ -27,7 +27,6 @@
 #define ACK_MSG 'A'
 #define NAK_MSG 'N'
 #define EOT_MSG 'E'
-#define BYE_MSG 'B'
 
 #define REQ_MSG 'R'
 #define OFF_MSG 'O'
@@ -46,6 +45,9 @@
 #define TIMEOUT 1000000 // 1 second
 
 #define SHA256_BLOCK_SIZE 32
+
+#define IMAGE_PATH "/home/ales/School/KDS/KDS-Semestral/images/image.jpeg"
+#define SAVE_PATH "/home/ales/School/KDS/KDS-Semestral/images/received_image.jpeg"
 
 typedef unsigned char byte;
 
