@@ -5,229 +5,281 @@
 
 #include "communication.h"
 
-uint16_t *get_segment_sizes(size_t image_size, size_t *number_of_packets) {
-    uint16_t *packet_sizes;
 
-    // Calculate number of packets
-    *number_of_packets = image_size / DATA_SIZE;
-    if (image_size % DATA_SIZE != 0) {
-        (*number_of_packets)++;
-    }
-
-    // Allocate memory for packet sizes
-    packet_sizes = malloc(sizeof(uint16_t) * *number_of_packets);
-
-    // Fill packet sizes
-    for (int i = 0; i < *number_of_packets; i++) {
-        packet_sizes[i] = DATA_SIZE;
-    }
-
-    // Set last packet size
-    packet_sizes[*number_of_packets - 1] = image_size % DATA_SIZE;
-
-    return packet_sizes;
-}
-
-bool request_image(int socket, size_t *image_size, struct sockaddr *sender_address) {
-    unsigned char packet[PACKET_SIZE];
-    socklen_t addr_len = sizeof(*sender_address);
-
-    // Send request
-    packet[0] = REQ_MSG;
-    memset(&packet[1], 0, PACKET_SIZE - 1);
-    encode_packet(packet, PACKET_SIZE);
-    sendto(socket, packet, PACKET_SIZE, 0, sender_address, addr_len);
-
-    // Listen for response
-    recvfrom(socket, packet, PACKET_SIZE, 0, NULL, NULL);
-    if ((packet[0] == OFF_MSG) && (decode_packet(packet, PACKET_SIZE))) {
-        *image_size = packet[1] << 24;
-        *image_size |= packet[2] << 16;
-        *image_size |= packet[3] << 8;
-        *image_size |= packet[4];
-    } else {
-        return false;
-    }
-
-    // Send acknowledgement
-    packet[0] = ACK_MSG;
-    memset(&packet[1], 0, PACKET_SIZE - 1);
-    encode_packet(packet, PACKET_SIZE);
-    sendto(socket, packet, PACKET_SIZE, 0, sender_address, addr_len);
-
-    return true;
-}
-
-bool offer_image(int socket, size_t image_size, struct sockaddr *receiver_address) {
-    unsigned char packet[PACKET_SIZE];
-    socklen_t addr_len = sizeof(*receiver_address);
-
-    // Listen for request
-    recvfrom(socket, packet, PACKET_SIZE, 0, NULL, NULL);
-
-    // Send image size
-    packet[0] = OFF_MSG;
-    packet[1] = (unsigned char) (image_size >> 24);
-    packet[2] = (unsigned char) (image_size >> 16);
-    packet[3] = (unsigned char) (image_size >> 8);
-    packet[4] = (unsigned char) image_size;
-    memset(&packet[5], 0, PACKET_SIZE - 5);
-    encode_packet(packet, PACKET_SIZE);
-    sendto(socket, packet, PACKET_SIZE, 0, receiver_address, addr_len);
-
-    // Listen for acknowledgement
-    recvfrom(socket, packet, PACKET_SIZE, 0, NULL, NULL);
-    if ((packet[0] == ACK_MSG) && (decode_packet(packet, PACKET_SIZE))) {
-        return true;
-    }
-    return false;
-}
-
-void send_image(int socket, unsigned char *image, size_t image_size, struct sockaddr *receiver_address) {
-    uint16_t *segment_sizes;
-    size_t number_of_packets;
-    size_t offset = 0;
-
-    // Get segment sizes
-    segment_sizes = get_segment_sizes(image_size, &number_of_packets);
-
-    // Send data packets
-    for (size_t i = 0; i < number_of_packets; i++) {
-        send_data_packet(socket, image + offset, segment_sizes[i], i, receiver_address);
-        offset += segment_sizes[i];
-    }
-
-    free(segment_sizes);
-}
-
-void send_data_packet(int socket, unsigned char *data, uint16_t segment_size, size_t packet_number,
-                      struct sockaddr *receiver_address) {
-    unsigned char packet[PACKET_SIZE];
-    socklen_t addr_len = sizeof(*receiver_address);
-
-    // Add msg type prefix
-    packet[0] = DATA_MSG;
-
-    // Add packet number
-    packet[1] = (unsigned char) (packet_number >> 24);
-    packet[2] = (unsigned char) (packet_number >> 16);
-    packet[3] = (unsigned char) (packet_number >> 8);
-    packet[4] = (unsigned char) packet_number;
-
-    // Add data size
-    packet[5] = (unsigned char) (segment_size >> 8);
-    packet[6] = (unsigned char) segment_size;
-
-    // Add data
-    memcpy(&packet[7], data, segment_size);
-
-    // Calculate CRC
-    encode_packet(packet, PACKET_SIZE);
-
-    // Send packet
-    sendto(socket, packet, PACKET_SIZE, 0, receiver_address, addr_len);
-}
-
-unsigned char *receive_image(int socket, size_t image_size, struct sockaddr *sender_address) {
-    unsigned char *buffer = malloc(image_size);
-    size_t packet_number;
-    size_t offset = 0;
-    uint16_t *segment_sizes;
-    size_t n_packets;
-    uint16_t segment_size;
-
-    // Get segment sizes
-    segment_sizes = get_segment_sizes(image_size, &n_packets);
-
-    // Receive packets
-    for (size_t i = 0; i < n_packets; i++) {
-        receive_data_packet(socket, buffer + offset, &segment_size, &packet_number, sender_address);
-        offset += segment_size;
-    }
-
-    free(segment_sizes);
-
-    return buffer;
-}
-
-bool receive_data_packet(int socket, unsigned char *buffer, uint16_t *segment_size, size_t *packet_number,
-                         struct sockaddr *sender_address) {
-    unsigned char packet[PACKET_SIZE];
-    socklen_t addr_len = sizeof(*sender_address);
-
-    // Listen for packet
-    recvfrom(socket, packet, PACKET_SIZE, 0, NULL, NULL);
-
-    // Check if packet is valid
-    if ((packet[0] == DATA_MSG) && (decode_packet(packet, PACKET_SIZE))) {
-
-        // Get packet number
-        *packet_number = packet[1] << 24;
-        *packet_number |= packet[2] << 16;
-        *packet_number |= packet[3] << 8;
-        *packet_number |= packet[4];
-
-        // Get data size
-        *segment_size = packet[5] << 8;
-        *segment_size |= packet[6];
-
-        // Get data
-        memcpy(buffer, &packet[7], *segment_size);
-
-        return true;
-    } else {
-        return false;
-    }
-}
-
-bool send_hash(int socket, unsigned char *hash, struct sockaddr *address) {
-    unsigned char packet[PACKET_SIZE];
+void send_packet(int socket, byte msg_type, size_t n1, uint16_t n2, byte *data, struct sockaddr *address) {
+    byte packet[PACKET_SIZE];
     socklen_t addr_len = sizeof(*address);
 
-    // Add msg type prefix
-    packet[0] = HASH_MSG;
+    // Fill packet
+    packet[0] = msg_type;
+    memcpy(&packet[1], &n1, sizeof(size_t));
+    memcpy(&packet[1 + sizeof(size_t)], &n2, sizeof(uint16_t));
 
-    // Add hash
-    memcpy(&packet[1], hash, SHA256_BLOCK_SIZE);
+    if (data != NULL) {
+        memcpy(&packet[1 + sizeof(size_t) + sizeof(uint16_t)], data, n2);
+    } else {
+        memset(&packet[1 + sizeof(size_t) + sizeof(uint16_t)], 0, n2);
+    }
 
     // Calculate CRC
     encode_packet(packet, PACKET_SIZE);
 
     // Send packet
     sendto(socket, packet, PACKET_SIZE, 0, address, addr_len);
+}
 
-    // Listen for acknowledgement
+bool receive_packet(int socket, byte *msg_type, size_t *n1, uint16_t *n2, byte *data) {
+    fd_set read_fds;
+    byte packet[PACKET_SIZE];
+    struct timeval timeout = {0, TIMEOUT};
+
+    // Wait for packet, if timeout or error occurs, return false
+    FD_ZERO(&read_fds);
+    FD_SET(socket, &read_fds);
+
+    switch (select(socket + 1, &read_fds, NULL, NULL, &timeout)) {
+        case -1:
+            printf("ERROR: select() failed\n");
+            return false;
+        case 0:
+            printf("WARNING: Timeout\n");
+            return false;
+        default:
+            break;
+    }
+
+    // Receive packet
     recvfrom(socket, packet, PACKET_SIZE, 0, NULL, NULL);
-    if ((packet[0] == ACK_MSG) && (decode_packet(packet, PACKET_SIZE))) {
-        return true;
+
+    // Decode packet, if CRC is invalid, return false
+    if (!decode_packet(packet, PACKET_SIZE)) {
+        printf("WARNING: CRC error\n");
+        return false;
+    }
+
+    // Extract packet data
+    *msg_type = packet[0];
+
+    if (n1 != NULL) {
+        memcpy(n1, &packet[1], sizeof(size_t));
+    }
+
+    if (n2 != NULL) {
+        memcpy(n2, &packet[1 + sizeof(size_t)], sizeof(uint16_t));
+    }
+
+    if (data != NULL) {
+        memcpy(data, &packet[1 + sizeof(size_t) + sizeof(uint16_t)], DATA_SIZE);
+    }
+
+    return true;
+}
+
+bool request_image(int socket, size_t *image_size, struct sockaddr *sender_address) {
+    byte msg_type;
+
+    // Send request
+    send_packet(socket, REQ_MSG, 0, 0, NULL, sender_address);
+    printf("INFO: Request sent\n");
+
+    // Listen for response
+    for (int i = 0; i < 10; i++) {
+        if (receive_packet(socket, &msg_type, image_size, NULL, NULL)
+            && (msg_type == OFF_MSG)) {
+            printf("INFO: Received OFF message with image size: %lu\n", *image_size);
+            send_packet(socket, ACK_MSG, 0, 0, NULL, sender_address);
+            return true;
+        } else {
+            printf("WARNING: Sending request again\n");
+            send_packet(socket, REQ_MSG, 0, 0, NULL, sender_address);
+        }
     }
     return false;
 }
 
-bool verify_hash(int socket, unsigned char *hash, struct sockaddr *address) {
-    unsigned char packet[PACKET_SIZE];
-    socklen_t addr_len = sizeof(*address);
-    unsigned char received_hash[SHA256_BLOCK_SIZE];
+void offer_image(int socket, size_t image_size, struct sockaddr *receiver_address) {
+    byte msg_type;
 
-    // Listen for packet
-    recvfrom(socket, packet, PACKET_SIZE, 0, NULL, NULL);
+    // Listen for request
+    while (!receive_packet(socket, &msg_type, NULL, NULL, NULL)
+           || msg_type != REQ_MSG) {
+    }
+    printf("INFO: Received request\n");
 
-    // Check if packet is valid
-    if ((packet[0] == HASH_MSG) && (decode_packet(packet, PACKET_SIZE))) {
+    // Send image size
+    while (true) {
+        send_packet(socket, OFF_MSG, image_size, 0, NULL, receiver_address);
 
-        // Get hash
-        memcpy(received_hash, &packet[1], SHA256_BLOCK_SIZE);
-
-        if (!memcmp(received_hash, hash, SHA256_BLOCK_SIZE)) {
-            // Send acknowledgement
-            packet[0] = ACK_MSG;
-            memset(&packet[1], 0, PACKET_SIZE - 1);
-            encode_packet(packet, PACKET_SIZE);
-            sendto(socket, packet, PACKET_SIZE, 0, address, addr_len);
-            return true;
+        // Listen for ACK
+        if (receive_packet(socket, &msg_type, NULL, NULL, NULL) && msg_type == ACK_MSG) {
+            printf("INFO: Received ACK, proceeding to send image\n");
+            return;
+        } else {
+            printf("WARNING: ACK not received, sending OFF again\n");
         }
     }
-    return false;
+
+}
+
+void send_image(int socket, byte *image, size_t image_size, const byte *hash, struct sockaddr *receiver_address) {
+    size_t i = 0;
+    byte msg_type;
+    byte data[DATA_SIZE];
+    size_t packet_number;
+
+    bool *acks;
+    size_t n_packets;
+    uint16_t *segment_sizes;
+
+    // Get segment sizes
+    segment_sizes = get_segment_sizes(image_size, &n_packets);
+    printf("INFO: Number of packets: %lu\n", n_packets);
+
+    // Allocate memory for ACKs
+    acks = malloc(sizeof(bool) * n_packets);
+    memset(acks, false, sizeof(bool) * n_packets);
+
+    while (true) {
+        // Send segment
+        if (!acks[i]) {
+            send_packet(socket, DATA_MSG,
+                        i, segment_sizes[i],
+                        &image[get_offset(segment_sizes, i)],
+                        receiver_address);
+        }
+
+        // Listen for response
+        if (receive_packet(socket, &msg_type, &packet_number, NULL, data)
+            && packet_number < n_packets) {
+            switch (msg_type) {
+                case ACK_MSG: // Acknowledge segment
+                    printf("INFO: Received ACK for segment %lu\n", packet_number);
+
+                    // Mark segment as acknowledged
+                    acks[packet_number] = true;
+                    break;
+                case NAK_MSG: // Negative acknowledge segment, resend
+                    printf("WARNING: Received NAK for segment %lu\n", packet_number);
+
+                    // Resend packet
+                    send_packet(socket, DATA_MSG,
+                                packet_number, segment_sizes[packet_number],
+                                &image[get_offset(segment_sizes, packet_number)],
+                                receiver_address);
+                    break;
+                case HASH_MSG: // Hash received, send ack or nak
+                    printf("INFO: Received hash\n");
+
+                    // Check if hash is correct
+                    if (memcmp(data, hash, SHA256_BLOCK_SIZE) == 0) {
+                        printf("INFO: Hash is correct\n");
+                        send_packet(socket, ACK_MSG, 0, 0, NULL, receiver_address);
+                    } else {
+                        printf("ERROR: Hash is incorrect\n");
+                        send_packet(socket, NAK_MSG, 0, 0, NULL, receiver_address);
+                    }
+                    break;
+                case EOT_MSG: // End of transmission, exit
+                    printf("INFO: Received EOT\n");
+                    free(segment_sizes);
+                    free(acks);
+                    return;
+                default:
+                    printf("WARNING: Received unknown message type\n");
+                    break;
+            }
+        }
+
+        // Increment segment index
+        i = (i + 1) % n_packets;
+    }
+}
+
+byte *receive_image(int socket, size_t image_size, struct sockaddr *sender_address) {
+    size_t i;
+
+    byte msg_type;
+    uint16_t data_size;
+    size_t packet_number;
+
+    byte data[DATA_SIZE];
+    byte *image = malloc(image_size);
+
+    bool *acks;
+    size_t n_packets;
+    uint16_t *segment_sizes;
+
+    SHA256_CTX ctx;
+    byte hash[SHA256_BLOCK_SIZE];
+
+    // Get segment sizes
+    segment_sizes = get_segment_sizes(image_size, &n_packets);
+    printf("INFO: Number of expected packets: %lu\n", n_packets);
+
+    // Allocate memory for ACKs
+    acks = malloc(sizeof(bool) * n_packets);
+    memset(acks, false, sizeof(bool) * n_packets);
+
+    // Receive image
+    while ((i = get_missing_segment(acks, n_packets)) < n_packets) {
+
+        // Listen for data segment
+        if (receive_packet(socket, &msg_type, &packet_number, &data_size, data)
+            && msg_type == DATA_MSG && (packet_number < n_packets)) {
+            printf("INFO: Received segment %lu\n", packet_number);
+            acks[packet_number] = true;
+            memcpy(&image[get_offset(segment_sizes, packet_number)], data, data_size);
+            send_packet(socket, ACK_MSG, packet_number, 0, NULL, sender_address);
+        }
+
+        // Inform sender of missing segment
+        if (acks[i] == 0) {
+            printf("WARNING: Missing segment %lu\n", i);
+            send_packet(socket, NAK_MSG, i, 0, NULL, sender_address);
+        }
+    }
+
+    // Send hash
+    sha256_init(&ctx);
+    sha256_update(&ctx, image, image_size);
+    sha256_final(&ctx, hash);
+
+    // Print hash
+    printf("INFO: Hash: ");
+    for (int j = 0; j < SHA256_BLOCK_SIZE; j++) {
+        printf(" 0x%02x", hash[j]);
+    }
+    printf("\n");
+
+    while (true) {
+        printf("INFO: Sending hash for verification\n");
+        send_packet(socket, HASH_MSG, 0, SHA256_BLOCK_SIZE, hash, sender_address);
+
+        // Listen for ACK
+        if (receive_packet(socket, &msg_type, NULL, NULL, NULL)) {
+            if (msg_type == ACK_MSG) {
+                printf("INFO: Received ACK, image received successfully\n");
+                break;
+            } else if (msg_type == NAK_MSG) {
+                printf("ERROR: Received NAK, image received unsuccessfully\n");
+                return NULL;
+            } else {
+                printf("WARNING: Received unknown message type, sending hash again\n");
+            }
+        }
+    }
+
+    // Send EOT
+    printf("INFO: Sending EOT messages\n");
+    for (i = 0; i < 3; i++) {
+        printf("INFO: %lu/3 EOT\n", i + 1);
+        send_packet(socket, EOT_MSG, 0, 0, NULL, sender_address);
+    }
+
+    free(segment_sizes);
+    free(acks);
+
+    return image;
 }
 
 

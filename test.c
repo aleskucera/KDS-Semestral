@@ -15,6 +15,7 @@
 #include <stdio.h>
 #include <memory.h>
 #include <string.h>
+#include <unistd.h>
 #include "sha256.h"
 
 /*********************** FUNCTION DEFINITIONS ***********************/
@@ -59,7 +60,25 @@ int sha256_test() {
 }
 
 int main() {
-    printf("SHA-256 tests: %s\n", sha256_test() ? "SUCCEEDED" : "FAILED");
+    int a = 4;
+    printf("a = %d\n", a);
+    while (1) {
+        switch (a) {
+            case 1:
+                printf("1");
+                continue;
+            case 2:
+                printf("2");
+                break;
+            case 3:
+                printf("3");
+                continue;
+            default:
+                printf("default");
+                break;
+        }
+        break;
+    }
 
     return (0);
 }

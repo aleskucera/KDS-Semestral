@@ -11,14 +11,13 @@
 
 #include <stdbool.h>
 
-# define CRC_POLY 0xffff
-# define CRC_SIZE 2
+#include "main.h"
 
-void encode_packet(unsigned char *buffer, long size);
+void encode_packet(byte *buffer, long size);
 
-bool decode_packet(unsigned char *buffer, long size);
+bool decode_packet(byte *buffer, long size);
 
-unsigned short crc_ccitt(unsigned char *data, size_t length, unsigned short seed, unsigned short final);
+unsigned short crc_ccitt(byte *data, size_t length, unsigned short seed, unsigned short final);
 
 static unsigned short crc_table[256] = {
 

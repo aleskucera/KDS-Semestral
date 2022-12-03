@@ -18,46 +18,28 @@
 #include <netinet/in.h>
 
 #include "crc.h"
+#include "main.h"
+#include "utils.h"
 #include "sha256.h"
-
-#define REQ_MSG 'R'
-#define OFF_MSG 'O'
-#define ACK_MSG 'A'
-#define NAK_MSG 'N'
-#define HASH_MSG 'H'
-#define DATA_MSG 'D'
-
-
-#define DATA_SIZE 512
-#define HEADER_SIZE (1 +  sizeof(size_t) + sizeof(uint16_t) + CRC_SIZE) // TYPE | PN | DS | D | CRC
-#define PACKET_SIZE (DATA_SIZE + HEADER_SIZE)
-
-
-uint16_t *get_segment_sizes(size_t image_size, size_t *number_of_packets);
 
 // ---------------- CONNECTION ESTABLISHMENT ----------------
 
 bool request_image(int socket, size_t *image_size, struct sockaddr *sender_address);
 
-bool offer_image(int socket, size_t image_size, struct sockaddr *receiver_address);
+void offer_image(int socket, size_t image_size, struct sockaddr *receiver_address);
 
 
 // ---------------- DATA TRANSFER ----------------
 
-void send_image(int socket, unsigned char *image, size_t image_size, struct sockaddr *receiver_address);
-
-void send_data_packet(int socket, unsigned char *data, uint16_t segment_size,
-                      size_t packet_number, struct sockaddr *receiver_address);
+void send_image(int socket, byte *image, size_t image_size, const byte *hash, struct sockaddr *receiver_address);
 
 unsigned char *receive_image(int socket, size_t image_size, struct sockaddr *sender_address);
 
-bool receive_data_packet(int socket, unsigned char *buffer, uint16_t *segment_size,
-                         size_t *packet_number, struct sockaddr *sender_address);
+// ---------------- UTILITY ----------------
 
-// ---------------- DATA VERIFICATION ----------------
+void send_packet(int socket, byte msg_type, size_t n1, uint16_t n2, byte *data, struct sockaddr *address);
 
-bool send_hash(int socket, unsigned char *hash, struct sockaddr *address);
+bool receive_packet(int socket, byte *msg_type, size_t *n1, uint16_t *n2, byte *data);
 
-bool verify_hash(int socket, unsigned char *hash, struct sockaddr *address);
 
 #endif //COMMUNICATION_H

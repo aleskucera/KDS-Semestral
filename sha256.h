@@ -1,7 +1,3 @@
-//
-// Created by ales on 1.12.22.
-//
-
 /*********************************************************************
 * Filename:   sha256.h
 * Author:     Brad Conte (brad AT bradconte.com)
