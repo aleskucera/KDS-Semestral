@@ -46,8 +46,8 @@
 
 #define SHA256_BLOCK_SIZE 32
 
-#define IMAGE_PATH "/home/ales/School/KDS/KDS-Semestral/images/image.jpeg"
-#define SAVE_PATH "/home/ales/School/KDS/KDS-Semestral/images/received_image.jpeg"
+#define IMAGE_PATH "../images/image.jpeg"
+#define SAVE_PATH "../images/received_image.jpeg"
 
 typedef unsigned char byte;
 
