@@ -7,7 +7,7 @@
     },
     "Manipulation": {
       "DropRate": 10,
-      "ErrorRate": 0
+      "ErrorRate": 50
     },
     "Delay": {
       "Mean": 100,

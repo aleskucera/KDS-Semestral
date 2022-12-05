@@ -53,7 +53,7 @@ bool receive_packet(int socket, byte *msg_type, size_t *n1, uint16_t *n2, byte *
 
     // Decode packet, if CRC is invalid, return false
     if (!decode_packet(packet, PACKET_SIZE)) {
-        printf("WARNING: CRC error\n");
+        printf("WARNING: CRC error \n");
         return false;
     }
 

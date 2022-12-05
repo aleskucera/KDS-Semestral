@@ -18,8 +18,6 @@
 
 uint16_t *get_segment_sizes(size_t image_size, size_t *number_of_packets);
 
-bool all_segments_sent(const bool *sent_segments, size_t number_of_packets);
-
 size_t get_missing_segment(const bool *sent_segments, size_t number_of_packets);
 
 size_t get_offset(const uint16_t *segment_sizes, size_t index);
