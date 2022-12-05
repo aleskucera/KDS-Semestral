@@ -6,12 +6,12 @@
       "TargetHostName": "127.0.0.1"
     },
     "Manipulation": {
-      "DropRate": 10,
-      "ErrorRate": 50
+      "DropRate": 30,
+      "ErrorRate": 40
     },
     "Delay": {
-      "Mean": 100,
-      "StdDev": 10
+      "Mean": 500,
+      "StdDev": 100
     }
   },
   "Acknowledgement": {
@@ -21,12 +21,12 @@
       "TargetHostName": "127.0.0.1"
     },
     "Manipulation": {
-      "DropRate": 10,
-      "ErrorRate": 0
+      "DropRate": 30,
+      "ErrorRate": 30
     },
     "Delay": {
-      "Mean": 100,
-      "StdDev": 10
+      "Mean": 500,
+      "StdDev": 100
     }
   }
 }
