@@ -34,13 +34,15 @@
 #define HASH_MSG 'H'
 #define DATA_MSG 'D'
 
-#define DATA_SIZE 512
+#define DATA_SIZE 1024
 #define PACKET_SIZE (1 + sizeof(size_t) \
                     + sizeof(uint16_t)  \
                     + DATA_SIZE + CRC_SIZE)
 
 # define CRC_POLY 0xffff
 # define CRC_SIZE 2
+
+#define WINDOW_SIZE 10
 
 #define TIMEOUT 1000000 // 1 second
 

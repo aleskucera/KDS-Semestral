@@ -130,6 +130,7 @@ void send_image(int socket, byte *image, size_t image_size, const byte *hash, st
     size_t packet_number;
 
     bool *acks;
+    bool *sents;
     size_t n_packets;
     uint16_t segment_size;
     uint16_t *segment_sizes;
@@ -142,13 +143,17 @@ void send_image(int socket, byte *image, size_t image_size, const byte *hash, st
     acks = malloc(sizeof(bool) * n_packets);
     memset(acks, false, sizeof(bool) * n_packets);
 
+    sents = malloc(sizeof(bool) * n_packets);
+    memset(sents, false, sizeof(bool) * n_packets);
+
     while (true) {
         // Send segment
-        if (!acks[i]) {
+        if (!sents[i]) {
             send_packet(socket, DATA_MSG,
                         i, segment_sizes[i],
                         &image[get_offset(segment_sizes, i)],
                         receiver_address);
+            sents[i] = true;
         }
 
         // Listen for response
@@ -167,7 +172,10 @@ void send_image(int socket, byte *image, size_t image_size, const byte *hash, st
                     break;
                 case NAK_MSG: // Negative acknowledge segment, resend
                     printf("WARNING: Received NAK for segment %lu\n", packet_number);
-
+                    //Fill ACKs
+                    for (int i = 0; i < packet_number; i++) {
+                        acks[i] = true;
+                    }
                     // Resend packet
                     send_packet(socket, DATA_MSG,
                                 packet_number, segment_sizes[packet_number],
@@ -190,6 +198,7 @@ void send_image(int socket, byte *image, size_t image_size, const byte *hash, st
                     printf("INFO: Received EOT\n");
                     free(segment_sizes);
                     free(acks);
+                    free(sents);
                     return;
                 default:
                     printf("WARNING: Received unknown message type\n");
@@ -200,7 +209,11 @@ void send_image(int socket, byte *image, size_t image_size, const byte *hash, st
         }
 
         // Increment segment index
-        i = (i + 1) % n_packets;
+        if (i < (WINDOW_SIZE + get_missing_segment(acks, n_packets)) && i < n_packets-1) {
+            i++;
+        } else {
+            i = get_missing_segment(acks, n_packets);
+        }
     }
 }
 
@@ -238,7 +251,7 @@ byte *receive_image(int socket, size_t image_size, struct sockaddr *sender_addre
             printf("INFO: Received segment %lu\n", packet_number);
             acks[packet_number] = true;
             memcpy(&image[get_offset(segment_sizes, packet_number)], data, data_size);
-            send_packet(socket, ACK_MSG, packet_number, 0, NULL, sender_address);
+            //send_packet(socket, ACK_MSG, packet_number, 0, NULL, sender_address);
         } else {
             printf("WARNING: Received invalid packet\n");
         }
