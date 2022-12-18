@@ -213,6 +213,9 @@ void send_image(int socket, byte *image, size_t image_size, const byte *hash, st
             i++;
         } else {
             i = get_missing_segment(acks, n_packets);
+            if (i == n_packets){
+                i = 0;
+            }
         }
     }
 }
@@ -251,7 +254,7 @@ byte *receive_image(int socket, size_t image_size, struct sockaddr *sender_addre
             printf("INFO: Received segment %lu\n", packet_number);
             acks[packet_number] = true;
             memcpy(&image[get_offset(segment_sizes, packet_number)], data, data_size);
-            //send_packet(socket, ACK_MSG, packet_number, 0, NULL, sender_address);
+            send_packet(socket, ACK_MSG, packet_number, data_size, NULL, sender_address);
         } else {
             printf("WARNING: Received invalid packet\n");
         }
