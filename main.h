@@ -6,6 +6,17 @@
 #ifndef MAIN_H
 #define MAIN_H
 
+#include <stdio.h>
+#include <stdlib.h>
+
+#include <unistd.h>
+#include <string.h>
+#include <stdbool.h>
+
+#include <sys/types.h>
+#include <sys/socket.h>
+#include <netinet/in.h>
+
 /* Message structure:
  *
  * TYPE | N1 | N2 | D | CRC
@@ -42,9 +53,10 @@
 # define CRC_POLY 0xffff
 # define CRC_SIZE 2
 
-#define WINDOW_SIZE 10
+#define WINDOW_SIZE 20
 
-#define TIMEOUT 1000000 // 1 second
+#define PACKET_TIMEOUT 1 // in seconds
+#define TIMEOUT 100000 // in microseconds
 
 #define SHA256_BLOCK_SIZE 32
 

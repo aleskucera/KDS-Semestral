@@ -38,6 +38,15 @@ size_t get_missing_segment(const bool *acks, size_t number_of_packets) {
     return number_of_packets;
 }
 
+size_t get_last_segment(const bool *acks, size_t number_of_packets) {
+    for (int i = 0; i < number_of_packets; ++i) {
+        if (!acks[i]) {
+            return i - 1;
+        }
+    }
+    return number_of_packets - 1;
+}
+
 size_t get_offset(const uint16_t *segment_sizes, size_t index) {
     size_t offset = 0;
     for (size_t i = 0; i < index; i++) {

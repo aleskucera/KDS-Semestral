@@ -28,21 +28,31 @@ void send_packet(int socket, byte msg_type, size_t n1, uint16_t n2, byte *data, 
     sendto(socket, packet, PACKET_SIZE, 0, address, addr_len);
 }
 
-bool receive_packet(int socket, byte *msg_type, size_t *n1, uint16_t *n2, byte *data) {
+bool receive_packet(int socket, byte *msg_type, size_t *n1, uint16_t *n2, byte *data, const struct timeval *timeout) {
     fd_set read_fds;
     byte packet[PACKET_SIZE];
-    struct timeval timeout = {0, TIMEOUT};
+
 
     // Wait for packet, if timeout or error occurs, return false
     FD_ZERO(&read_fds);
     FD_SET(socket, &read_fds);
 
-    switch (select(socket + 1, &read_fds, NULL, NULL, &timeout)) {
+    int select_result;
+    if (timeout != NULL) {
+        struct timeval timeout_copy = *timeout;
+        select_result = select(socket + 1, &read_fds, NULL, NULL, &timeout_copy);
+    } else {
+        select_result = select(socket + 1, &read_fds, NULL, NULL, NULL);
+    }
+
+    switch (select_result) {
         case -1:
             printf("ERROR: select() failed\n");
             return false;
         case 0:
-            printf("WARNING: Timeout\n");
+            if (timeout != NULL) {
+                printf("ERROR: select() timed out\n");
+            }
             return false;
         default:
             break;
@@ -77,6 +87,7 @@ bool receive_packet(int socket, byte *msg_type, size_t *n1, uint16_t *n2, byte *
 
 bool request_image(int socket, size_t *image_size, struct sockaddr *sender_address) {
     byte msg_type;
+    struct timeval timeout = {0, TIMEOUT};
 
     // Send request
     send_packet(socket, REQ_MSG, 0, 0, NULL, sender_address);
@@ -84,10 +95,10 @@ bool request_image(int socket, size_t *image_size, struct sockaddr *sender_addre
 
     // Listen for response
     for (int i = 0; i < 10; i++) {
-        if (receive_packet(socket, &msg_type, image_size, NULL, NULL)
+        if (receive_packet(socket, &msg_type, image_size, NULL, NULL, &timeout)
             && (msg_type == OFF_MSG)) {
             printf("INFO: Received OFF message with image size: %lu\n", *image_size);
-            for (int i = 0; i < 10; i++) {
+            for (int j = 0; j < 10; j++) {
                 send_packet(socket, ACK_MSG, 0, 0, NULL, sender_address);
             }
             return true;
@@ -103,7 +114,7 @@ void offer_image(int socket, size_t image_size, struct sockaddr *receiver_addres
     byte msg_type;
 
     // Listen for request
-    while (!receive_packet(socket, &msg_type, NULL, NULL, NULL)
+    while (!receive_packet(socket, &msg_type, NULL, NULL, NULL, NULL)
            || msg_type != REQ_MSG) {
     }
     printf("INFO: Received request\n");
@@ -113,7 +124,7 @@ void offer_image(int socket, size_t image_size, struct sockaddr *receiver_addres
         send_packet(socket, OFF_MSG, image_size, 0, NULL, receiver_address);
 
         // Listen for ACK
-        if (receive_packet(socket, &msg_type, NULL, NULL, NULL) && msg_type == ACK_MSG) {
+        if (receive_packet(socket, &msg_type, NULL, NULL, NULL, NULL) && msg_type == ACK_MSG) {
             printf("INFO: Received ACK, proceeding to send image\n");
             return;
         } else {
@@ -124,16 +135,20 @@ void offer_image(int socket, size_t image_size, struct sockaddr *receiver_addres
 }
 
 void send_image(int socket, byte *image, size_t image_size, const byte *hash, struct sockaddr *receiver_address) {
-    size_t i = 0;
+    size_t window_start;
+    size_t window_end;
     byte msg_type;
     byte data[DATA_SIZE];
     size_t packet_number;
+    struct timeval timeout = {0, TIMEOUT};
+    struct timespec now;
 
     bool *acks;
-    bool *sents;
+    struct timespec *sent;
     size_t n_packets;
     uint16_t segment_size;
     uint16_t *segment_sizes;
+    bool received_hash = false;
 
     // Get segment sizes
     segment_sizes = get_segment_sizes(image_size, &n_packets);
@@ -143,21 +158,46 @@ void send_image(int socket, byte *image, size_t image_size, const byte *hash, st
     acks = malloc(sizeof(bool) * n_packets);
     memset(acks, false, sizeof(bool) * n_packets);
 
-    sents = malloc(sizeof(bool) * n_packets);
-    memset(sents, false, sizeof(bool) * n_packets);
+    sent = malloc(sizeof(struct timespec) * n_packets);
+    for (int i = 0; i < n_packets; i++) {
+        sent[i].tv_sec = 0;
+        sent[i].tv_nsec = 0;
+    }
 
     while (true) {
-        // Send segment
-        if (!sents[i]) {
-            send_packet(socket, DATA_MSG,
-                        i, segment_sizes[i],
-                        &image[get_offset(segment_sizes, i)],
-                        receiver_address);
-            sents[i] = true;
+        window_start = get_missing_segment(acks, n_packets);
+        window_end = window_start + WINDOW_SIZE;
+
+        // Check if sent packets have timed out
+        if (!received_hash) {
+            for (size_t i = window_start; i < window_end && i < n_packets; i++) {
+
+                // Skip packets that has been acknowledged
+                if (acks[i]) {
+                    continue;
+                }
+
+                // Get time since packet was sent
+                clock_gettime(CLOCK_REALTIME, &now);
+                double elapsed = (now.tv_sec - sent[i].tv_sec) + (now.tv_nsec - sent[i].tv_nsec) * 1e-9;
+
+                if ((sent[i].tv_sec == 0) && (sent[i].tv_nsec == 0)){
+                    printf("INFO: Packet %lu has not been sent yet\n", i);
+                } else {
+                    printf("INFO: Packet %lu has been sent %.3f seconds ago\n", i, elapsed);
+                }
+
+                // If packet has timed out or has not been sent yet, send it
+                if ((elapsed > PACKET_TIMEOUT) || ((sent[i].tv_sec == 0) && (sent[i].tv_nsec == 0))) {
+                    clock_gettime(CLOCK_REALTIME, &sent[i]);
+                    send_packet(socket, DATA_MSG, i, segment_sizes[i],
+                                &image[get_offset(segment_sizes, i)], receiver_address);
+                }
+            }
         }
 
         // Listen for response
-        if (receive_packet(socket, &msg_type, &packet_number, &segment_size, data)
+        if (receive_packet(socket, &msg_type, &packet_number, &segment_size, data, &timeout)
             && packet_number < n_packets) {
             switch (msg_type) {
                 case ACK_MSG: // Acknowledge segment
@@ -170,18 +210,6 @@ void send_image(int socket, byte *image, size_t image_size, const byte *hash, st
                         printf("WARNING: Segment size mismatch\n");
                     }
                     break;
-                case NAK_MSG: // Negative acknowledge segment, resend
-                    printf("WARNING: Received NAK for segment %lu\n", packet_number);
-                    //Fill ACKs
-                    for (int i = 0; i < packet_number; i++) {
-                        acks[i] = true;
-                    }
-                    // Resend packet
-                    send_packet(socket, DATA_MSG,
-                                packet_number, segment_sizes[packet_number],
-                                &image[get_offset(segment_sizes, packet_number)],
-                                receiver_address);
-                    break;
                 case HASH_MSG: // Hash received, send ack or nak
                     printf("INFO: Received hash\n");
 
@@ -193,12 +221,13 @@ void send_image(int socket, byte *image, size_t image_size, const byte *hash, st
                         printf("ERROR: Hash is incorrect\n");
                         send_packet(socket, NAK_MSG, 0, 0, NULL, receiver_address);
                     }
+                    received_hash = true;
                     break;
                 case EOT_MSG: // End of transmission, exit
                     printf("INFO: Received EOT\n");
                     free(segment_sizes);
                     free(acks);
-                    free(sents);
+                    free(sent);
                     return;
                 default:
                     printf("WARNING: Received unknown message type\n");
@@ -206,26 +235,16 @@ void send_image(int socket, byte *image, size_t image_size, const byte *hash, st
             }
         } else {
             printf("WARNING: Received invalid packet\n");
-        }
 
-        // Increment segment index
-        if (i < (WINDOW_SIZE + get_missing_segment(acks, n_packets)) && i < n_packets-1) {
-            i++;
-        } else {
-            i = get_missing_segment(acks, n_packets);
-            if (i == n_packets){
-                i = 0;
-            }
         }
     }
 }
 
 byte *receive_image(int socket, size_t image_size, struct sockaddr *sender_address) {
-    size_t i;
-
     byte msg_type;
     uint16_t data_size;
     size_t packet_number;
+    struct timeval timeout = {0, TIMEOUT};
 
     byte data[DATA_SIZE];
     byte *image = malloc(image_size);
@@ -246,23 +265,17 @@ byte *receive_image(int socket, size_t image_size, struct sockaddr *sender_addre
     memset(acks, false, sizeof(bool) * n_packets);
 
     // Receive image
-    while ((i = get_missing_segment(acks, n_packets)) < n_packets) {
+    while (get_missing_segment(acks, n_packets) < n_packets) {
 
-        // Listen for data segment
-        if (receive_packet(socket, &msg_type, &packet_number, &data_size, data)
+        // Listen for data segment until something is received
+        if (receive_packet(socket, &msg_type, &packet_number, &data_size, data, NULL)
             && msg_type == DATA_MSG && (packet_number < n_packets)) {
             printf("INFO: Received segment %lu\n", packet_number);
             acks[packet_number] = true;
             memcpy(&image[get_offset(segment_sizes, packet_number)], data, data_size);
-            send_packet(socket, ACK_MSG, packet_number, data_size, NULL, sender_address);
+            send_packet(socket, ACK_MSG, packet_number, segment_sizes[packet_number], NULL, sender_address);
         } else {
             printf("WARNING: Received invalid packet\n");
-        }
-
-        // Inform sender of missing segment
-        if (acks[i] == 0) {
-            printf("WARNING: Missing segment %lu\n", i);
-            send_packet(socket, NAK_MSG, i, 0, NULL, sender_address);
         }
     }
 
@@ -278,28 +291,31 @@ byte *receive_image(int socket, size_t image_size, struct sockaddr *sender_addre
     }
     printf("\n");
 
+    printf("INFO: Sending hash for verification\n");
+    send_packet(socket, HASH_MSG, 0, SHA256_BLOCK_SIZE, hash, sender_address);
     while (true) {
-        printf("INFO: Sending hash for verification\n");
-        send_packet(socket, HASH_MSG, 0, SHA256_BLOCK_SIZE, hash, sender_address);
-
-        // Listen for ACK
-        if (receive_packet(socket, &msg_type, NULL, NULL, NULL)) {
+        if (receive_packet(socket, &msg_type, NULL, NULL, NULL, &timeout)) {
             if (msg_type == ACK_MSG) {
                 printf("INFO: Received ACK, image received successfully\n");
                 break;
             } else if (msg_type == NAK_MSG) {
                 printf("ERROR: Received NAK, image received unsuccessfully\n");
                 return NULL;
+            } else if (msg_type == DATA_MSG){
+                printf("WARNING: Received DATA, ignoring\n");
             } else {
-                printf("WARNING: Received unknown message type, sending hash again\n");
+                printf("WARNING: Received unknown message type, ignoring\n");
             }
+        } else {
+            printf("WARNING: No response received, sending hash again\n");
+            send_packet(socket, HASH_MSG, 0, SHA256_BLOCK_SIZE, hash, sender_address);
         }
     }
 
     // Send EOT
     printf("INFO: Sending EOT messages\n");
-    for (i = 0; i < 3; i++) {
-        printf("INFO: %lu/3 EOT\n", i + 1);
+    for (int i = 0; i < 10; i++) {
+        printf("INFO: %d/10 EOT\n", i + 1);
         send_packet(socket, EOT_MSG, 0, 0, NULL, sender_address);
     }
 
