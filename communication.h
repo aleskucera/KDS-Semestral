@@ -13,8 +13,6 @@
 #include <string.h>
 #include <stdbool.h>
 
-#include <time.h>
-
 #include <sys/types.h>
 #include <sys/socket.h>
 #include <netinet/in.h>
@@ -41,7 +39,7 @@ unsigned char *receive_image(int socket, size_t image_size, struct sockaddr *sen
 
 void send_packet(int socket, byte msg_type, size_t n1, uint16_t n2, byte *data, struct sockaddr *address);
 
-bool receive_packet(int socket, byte *msg_type, size_t *n1, uint16_t *n2, byte *data, const struct timeval *timeout);
+bool receive_packet(int socket, byte *msg_type, size_t *n1, uint16_t *n2, byte *data);
 
 
 #endif //COMMUNICATION_H
